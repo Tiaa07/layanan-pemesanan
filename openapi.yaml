@@ -1,0 +1,223 @@
+openapi: 3.1.0
+
+info:
+  title: Layanan Pemesanan Produk
+  version: 1.0.0
+  description: API untuk membuat, melihat, mengonfirmasi, dan membatalkan pesanan produk.
+  contact:
+    name: Tim Pengembang Layanan Pemesanan
+
+servers:
+  - url: http://localhost:8082/api
+    description: Server pengembangan lokal
+
+tags:
+  - name: Pesanan
+    description: Operasi untuk mengelola pesanan produk
+
+paths:
+  /v1/pesanan:
+    post:
+      tags: [Pesanan]
+      operationId: buatPesanan
+      summary: Membuat pesanan baru
+      description: Membuat pesanan baru dengan status awal menunggu.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BuatPesanan'
+      responses:
+        '201':
+          description: Pesanan berhasil dibuat
+          headers:
+            Location:
+              description: Lokasi resource pesanan yang baru dibuat
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PesananTunggal'
+        '422':
+          $ref: '#/components/responses/ValidasiGagal'
+
+  /v1/pesanan/{kode}:
+    parameters:
+      - name: kode
+        in: path
+        required: true
+        description: Kode unik pesanan
+        schema:
+          type: string
+          example: PSN-001
+    get:
+      tags: [Pesanan]
+      operationId: lihatPesanan
+      summary: Melihat detail pesanan
+      description: Menampilkan detail satu pesanan berdasarkan kode pesanan.
+      responses:
+        '200':
+          description: Detail pesanan ditemukan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PesananTunggal'
+        '404':
+          $ref: '#/components/responses/TidakDitemukan'
+  /v1/pesanan/{kode}/konfirmasi:
+    parameters:
+      - name: kode
+        in: path
+        required: true
+        description: Kode unik pesanan
+        schema:
+          type: string
+          example: PSN-001
+    post:
+      tags: [Pesanan]
+      operationId: konfirmasiPesanan
+      summary: Mengonfirmasi pesanan
+      description: Mengubah status pesanan dari menunggu menjadi dikonfirmasi.
+      responses:
+        '200':
+          description: Pesanan berhasil dikonfirmasi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PesananTunggal'
+        '404':
+          $ref: '#/components/responses/TidakDitemukan'
+        '409':
+          $ref: '#/components/responses/KonflikStatus'
+  /v1/pesanan/{kode}/batal:
+    parameters:
+      - name: kode
+        in: path
+        required: true
+        description: Kode unik pesanan
+        schema:
+          type: string
+          example: PSN-001
+    post:
+      tags: [Pesanan]
+      operationId: batalkanPesanan
+      summary: Membatalkan pesanan
+      description: Mengubah status pesanan dari menunggu menjadi dibatalkan.
+      responses:
+        '200':
+          description: Pesanan berhasil dibatalkan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PesananTunggal'
+        '404':
+          $ref: '#/components/responses/TidakDitemukan'
+        '409':
+          $ref: '#/components/responses/KonflikStatus'
+
+components:
+  schemas:
+    BuatPesanan:
+      type: object
+      required: [nama_pelanggan, sku_produk, jumlah]
+      properties:
+        nama_pelanggan:
+          type: string
+          maxLength: 120
+          example: Tia Anggraeni
+        sku_produk:
+          type: string
+          example: KRD-001
+        jumlah:
+          type: integer
+          minimum: 1
+          example: 2
+
+    Pesanan:
+      type: object
+      required: [kode_pesanan, nama_pelanggan, sku_produk, jumlah, status]
+      properties:
+        kode_pesanan:
+          type: string
+          example: PSN-001
+        nama_pelanggan:
+          type: string
+          example: Tia Anggraeni
+        sku_produk:
+          type: string
+          example: KRD-001
+        jumlah:
+          type: integer
+          minimum: 1
+          example: 2
+        status:
+          type: string
+          enum: [menunggu, dikonfirmasi, dibatalkan]
+          example: menunggu
+
+    PesananTunggal:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/Pesanan'
+
+    Problem:
+      type: object
+      required: [type, title, status, detail, instance]
+      properties:
+        type:
+          type: string
+          format: uri
+          example: https://layanan-pemesanan.test/problem/konflik-status
+        title:
+          type: string
+          example: Status pesanan tidak sesuai
+        status:
+          type: integer
+          example: 409
+        detail:
+          type: string
+          example: Pesanan yang sudah dikonfirmasi tidak dapat dibatalkan.
+        instance:
+          type: string
+          example: /api/v1/pesanan/PSN-001/batal
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+
+  responses:
+    TidakDitemukan:
+      description: Pesanan tidak ditemukan
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+
+    KonflikStatus:
+      description: Status pesanan tidak memungkinkan operasi dilakukan
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+
+    ValidasiGagal:
+      description: Data permintaan tidak valid
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: https://layanan-pemesanan.test/problem/validasi-gagal
+            title: Data permintaan tidak valid
+            status: 422
+            detail: Satu atau lebih field tidak memenuhi kontrak.
+            instance: /api/v1/pesanan
+            errors:
+              jumlah:
+                - Jumlah minimal adalah 1.
